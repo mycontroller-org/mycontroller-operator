@@ -18,7 +18,9 @@ package controllers
 
 import (
 	"context"
+	"os"
 
+	routev1 "github.com/openshift/api/route/v1"
 	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -26,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -334,9 +337,35 @@ func (r *MyControllerReconciler) createService(ctx context.Context, m *mycontrol
 }
 
 func (r *MyControllerReconciler) createRoute(ctx context.Context, m *mycontrollerv1.MyController) error {
+	// if it is a openshift platform continue or exit
+	if os.Getenv("is_openshift") != "true" {
+		return nil
+	}
+
+	log := ctrllog.FromContext(ctx)
+
+	mycRoute := &routev1.Route{ObjectMeta: metav1.ObjectMeta{
+		Name:      m.Name,
+		Namespace: m.Namespace,
+	},
+		Spec: routev1.RouteSpec{
+			To:   routev1.RouteTargetReference{Kind: "Service", Name: m.Name},
+			Port: &routev1.RoutePort{TargetPort: intstr.FromString("http-web")},
+			TLS:  &routev1.TLSConfig{},
+		},
+	}
+	// Set Memcached instance as the owner and controller
+	ctrl.SetControllerReference(m, mycRoute, r.Scheme)
+
+	err := r.Create(ctx, mycRoute)
+	if err != nil {
+		log.Error(err, "failed to create new route", "Namespace", mycRoute.Namespace, "Name", mycRoute.Name)
+		return err
+	}
+
 	return nil
 }
 
 func labelsForMyController(name string) map[string]string {
-	return map[string]string{"app": "myController", "myController_cr": name}
+	return map[string]string{"app": "mycontroller", "mycontroller_cr": name}
 }
