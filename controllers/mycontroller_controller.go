@@ -24,6 +24,7 @@ import (
 	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -81,8 +82,11 @@ func (r *MyControllerReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	found := &appsv1.Deployment{}
 	err = r.Get(ctx, types.NamespacedName{Name: myController.Name, Namespace: myController.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
-
-		r.setupMyController(ctx, myController)
+		err = r.setupMyController(ctx, myController)
+		if err != nil {
+			log.Error(err, "failed to setup mycontroller")
+			return ctrl.Result{}, err
+		}
 		// deployed successfully - return and requeue
 		return ctrl.Result{Requeue: true}, nil
 	} else if err != nil {
@@ -102,8 +106,32 @@ func (r *MyControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *MyControllerReconciler) setupMyController(ctx context.Context, m *mycontrollerv1.MyController) error {
+	// delete existing resources and create new resources
+	// delete deployment
+	err := r.Delete(ctx, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: m.Namespace, Name: m.Name}})
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+	// delete configmap
+	err = r.Delete(ctx, &v1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: m.Namespace, Name: m.Name}})
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+	// delete route
+	if os.Getenv("is_opensift") == "true" {
+		err = r.Delete(ctx, &routev1.Route{ObjectMeta: metav1.ObjectMeta{Namespace: m.Namespace, Name: m.Name}})
+		if err != nil && !errors.IsNotFound(err) {
+			return err
+		}
+	}
+	// delete service
+	err = r.Delete(ctx, &v1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: m.Namespace, Name: m.Name}})
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+
 	// create configmap
-	err := r.createConfigMap(ctx, m)
+	err = r.createConfigMap(ctx, m)
 	if err != nil {
 		return err
 	}
