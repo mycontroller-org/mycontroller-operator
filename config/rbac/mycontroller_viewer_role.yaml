@@ -1,0 +1,20 @@
+# permissions for end users to view mycontrollers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mycontroller-viewer-role
+rules:
+- apiGroups:
+  - mycontroller.org
+  resources:
+  - mycontrollers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - mycontroller.org
+  resources:
+  - mycontrollers/status
+  verbs:
+  - get

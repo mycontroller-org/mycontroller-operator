@@ -1,0 +1,7 @@
+apiVersion: mycontroller.org/v1
+kind: MyController
+metadata:
+  name: mycontroller-sample
+spec:
+  # Add fields here
+  foo: bar
