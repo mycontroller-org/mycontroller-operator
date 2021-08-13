@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	routev1 "github.com/openshift/api/route/v1"
@@ -25,6 +26,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -162,7 +164,32 @@ func (r *MyControllerReconciler) deployMyController(ctx context.Context, m *myco
 	ls := labelsForMyController(m.Name)
 	replicas := int32(1)
 
-	mcDeployment := &appsv1.Deployment{
+	// storage volumes
+	dataVolume := corev1.Volume{
+		Name:         "myc-data-dir",
+		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+	}
+	metricVolume := corev1.Volume{
+		Name:         "myc-metric-dir",
+		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+	}
+
+	// update storage volumes
+	storage := m.Spec.Storage
+	if storage.SizeData != nil {
+		err := r.updatePVC(ctx, m.Namespace, storage.StorageClassName, fmt.Sprintf("data-%s", m.Name), storage.SizeData, &dataVolume)
+		if err != nil {
+			return err
+		}
+	}
+	if storage.SizeMetric != nil {
+		err := r.updatePVC(ctx, m.Namespace, storage.StorageClassName, fmt.Sprintf("metric-%s", m.Name), storage.SizeMetric, &metricVolume)
+		if err != nil {
+			return err
+		}
+	}
+
+	mycDeployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.Name,
 			Namespace: m.Namespace,
@@ -187,11 +214,11 @@ func (r *MyControllerReconciler) deployMyController(ctx context.Context, m *myco
 						}},
 						VolumeMounts: []corev1.VolumeMount{
 							{
-								Name:      "mc-home-dir",
+								Name:      "myc-data-dir",
 								MountPath: "/mc_home",
 							},
 							{
-								Name:      "mc-config",
+								Name:      "myc-config",
 								MountPath: "/app/mycontroller.yaml",
 								SubPath:   "mycontroller.yaml",
 								ReadOnly:  true,
@@ -206,21 +233,15 @@ func (r *MyControllerReconciler) deployMyController(ctx context.Context, m *myco
 								Name:          "influxdb",
 							}},
 							VolumeMounts: []corev1.VolumeMount{{
-								Name:      "mc-influxdb-dir",
+								Name:      "myc-metric-dir",
 								MountPath: "/var/lib/influxdb",
 							}},
 						}},
 					Volumes: []corev1.Volume{
+						dataVolume,
+						metricVolume,
 						{
-							Name:         "mc-home-dir",
-							VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
-						},
-						{
-							Name:         "mc-influxdb-dir",
-							VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
-						},
-						{
-							Name: "mc-config",
+							Name: "myc-config",
 							VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
 								LocalObjectReference: corev1.LocalObjectReference{Name: m.Name},
 							}},
@@ -231,13 +252,45 @@ func (r *MyControllerReconciler) deployMyController(ctx context.Context, m *myco
 		},
 	}
 	// Set Memcached instance as the owner and controller
-	ctrl.SetControllerReference(m, mcDeployment, r.Scheme)
-	err := r.Create(ctx, mcDeployment)
+	ctrl.SetControllerReference(m, mycDeployment, r.Scheme)
+	err := r.Create(ctx, mycDeployment)
 	if err != nil {
-		log.Error(err, "failed to create new Deployment", "Deployment.Namespace", mcDeployment.Namespace, "Deployment.Name", mcDeployment.Name)
+		log.Error(err, "failed to create new Deployment", "Deployment.Namespace", mycDeployment.Namespace, "Deployment.Name", mycDeployment.Name)
 		return err
 	}
 
+	return nil
+}
+
+func (r *MyControllerReconciler) updatePVC(ctx context.Context, namespace, storageClassName, claimName string, pvSize *resource.Quantity, volume *corev1.Volume) error {
+	log := ctrllog.FromContext(ctx)
+	pvc := &corev1.PersistentVolumeClaim{}
+	err := r.Get(ctx, types.NamespacedName{Name: claimName, Namespace: namespace}, pvc)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+		// create pvc
+		pvc.ObjectMeta = metav1.ObjectMeta{Namespace: namespace, Name: claimName}
+		storageClassNameTmp := storageClassName
+		pvc.Spec = corev1.PersistentVolumeClaimSpec{
+			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			StorageClassName: &storageClassNameTmp,
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{"storage": *pvSize},
+			},
+		}
+		err = r.Create(ctx, pvc)
+		if err != nil {
+			log.Error(err, "failed to create new pvc", "Namespace", namespace, "Name", claimName, "StorageClassName", storageClassName)
+			return err
+		}
+	}
+	// update into given volume
+	volume.VolumeSource = corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+		ReadOnly:  false,
+		ClaimName: claimName,
+	}}
 	return nil
 }
 
@@ -264,8 +317,8 @@ func (r *MyControllerReconciler) createConfigMap(ctx context.Context, m *mycontr
 			Level: mycConfig.LogLevelConfig{
 				Core:       m.Spec.LogLevel,
 				WebHandler: m.Spec.LogLevel,
-				Storage:    m.Spec.LogLevel,
-				Metric:     m.Spec.LogLevel,
+				Storage:    "warn",
+				Metric:     "warn",
 			},
 		},
 		Directories: mycConfig.Directories{

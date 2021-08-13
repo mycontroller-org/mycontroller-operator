@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -31,9 +32,16 @@ type MyControllerSpec struct {
 	// Foo is an example field of MyController. Edit mycontroller_types.go to remove/update
 	// Foo              string `json:"foo,omitempty"`
 
-	Secret           string `json:"secret"`
-	DisableAnalytics bool   `json:"disable_analytics"`
-	LogLevel         string `json:"log_level"`
+	Secret           string              `json:"secret"`
+	DisableAnalytics bool                `json:"disable_analytics"`
+	LogLevel         string              `json:"log_level"`
+	Storage          MyControllerStorage `json:"storage"`
+}
+
+type MyControllerStorage struct {
+	StorageClassName string             `json:"storage_class_name"`
+	SizeData         *resource.Quantity `json:"data_size,omitempty"`
+	SizeMetric       *resource.Quantity `json:"metric_size,omitempty"`
 }
 
 // MyControllerStatus defines the observed state of MyController
