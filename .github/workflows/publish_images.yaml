@@ -19,7 +19,7 @@ jobs:
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_TOKEN }}
 
-      - name: Build container and push - ${{ matrix.container_image }}
+      - name: Build container and push
         run: |
           make generate
           make docker-build docker-push # operator image
