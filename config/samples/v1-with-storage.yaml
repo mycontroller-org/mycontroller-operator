@@ -1,13 +1,12 @@
 apiVersion: mycontroller.org/v1
 kind: MyController
 metadata:
-  name: myc-with-pvc
+  name: myc-storage
 spec:
   secret: my-secret
   disable_analytics: true
   log_level: info
   storage:
     storage_class_name: ""
-    data_size: "10Gi"
-    metric_size: "10Gi"
-
+    data_size: "5Gi"
+    metric_size: "5Gi"

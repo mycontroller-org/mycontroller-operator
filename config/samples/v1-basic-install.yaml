@@ -1,7 +1,7 @@
 apiVersion: mycontroller.org/v1
 kind: MyController
 metadata:
-  name: basic-install
+  name: myc-basic
 spec:
   secret: my-secret
   disable_analytics: true
