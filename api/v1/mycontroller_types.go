@@ -21,6 +21,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var (
+	MyControllerPhaseFailed  = "Failed"
+	MyControllerPhaseRunning = "Running"
+)
+
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
@@ -35,11 +40,11 @@ type MyControllerSpec struct {
 	Secret           string              `json:"secret"`
 	DisableAnalytics bool                `json:"disable_analytics"`
 	LogLevel         string              `json:"log_level"`
-	Storage          MyControllerStorage `json:"storage"`
+	Storage          MyControllerStorage `json:"storage,omitempty"`
 }
 
 type MyControllerStorage struct {
-	StorageClassName string             `json:"storage_class_name"`
+	StorageClassName string             `json:"storage_class_name,omitempty"`
 	SizeData         *resource.Quantity `json:"data_size,omitempty"`
 	SizeMetric       *resource.Quantity `json:"metric_size,omitempty"`
 }
@@ -48,10 +53,13 @@ type MyControllerStorage struct {
 type MyControllerStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	Phase string `json:"phase"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.phase",description="MyController instance's status"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // MyController is the Schema for the mycontrollers API
 type MyController struct {

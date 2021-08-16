@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"os"
 
 	routev1 "github.com/openshift/api/route/v1"
 	"gopkg.in/yaml.v2"
@@ -63,6 +62,8 @@ type MyControllerReconciler struct {
 func (r *MyControllerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrllog.FromContext(ctx)
 
+	log.Info("reconcile triggered", "namespace", req.Namespace, "name", req.Name)
+
 	// fetch the MyController instance
 	myController := &mycontrollerv1.MyController{}
 	err := r.Get(ctx, req.NamespacedName, myController)
@@ -83,10 +84,20 @@ func (r *MyControllerReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	found := &appsv1.Deployment{}
 	err = r.Get(ctx, types.NamespacedName{Name: myController.Name, Namespace: myController.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
+		err = r.removeMyController(ctx, myController)
+		if err != nil {
+			log.Error(err, "failed to remove existing resources")
+			return ctrl.Result{}, err
+		}
 		err = r.setupMyController(ctx, myController)
 		if err != nil {
 			log.Error(err, "failed to setup mycontroller")
 			return ctrl.Result{}, err
+		}
+
+		myController.Status.Phase = mycontrollerv1.MyControllerPhaseRunning
+		if err = r.Client.Status().Update(ctx, myController); err != nil {
+			log.Error(err, "failed to update status")
 		}
 		// deployed successfully - return and requeue
 		return ctrl.Result{Requeue: true}, nil
@@ -95,18 +106,36 @@ func (r *MyControllerReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
+	// TODO: verify the existing installation status and reconcile, if there is a need
+
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *MyControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	log := mgr.GetLogger()
+
+	// update platform
+	err := updatePlatform(mgr)
+	if err != nil {
+		return err
+	}
+
+	// Adding the routev1
+	if isOpenshift() {
+		if err := routev1.AddToScheme(mgr.GetScheme()); err != nil {
+			log.Error(err, "")
+			return err
+		}
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mycontrollerv1.MyController{}).
 		Owns(&appsv1.Deployment{}).
 		Complete(r)
 }
 
-func (r *MyControllerReconciler) setupMyController(ctx context.Context, m *mycontrollerv1.MyController) error {
+func (r *MyControllerReconciler) removeMyController(ctx context.Context, m *mycontrollerv1.MyController) error {
 	// delete existing resources and create new resources
 	// delete deployment
 	err := r.Delete(ctx, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: m.Namespace, Name: m.Name}})
@@ -119,7 +148,7 @@ func (r *MyControllerReconciler) setupMyController(ctx context.Context, m *mycon
 		return err
 	}
 	// delete route
-	if os.Getenv("is_opensift") == "true" {
+	if isOpenshift() {
 		err = r.Delete(ctx, &routev1.Route{ObjectMeta: metav1.ObjectMeta{Namespace: m.Namespace, Name: m.Name}})
 		if err != nil && !errors.IsNotFound(err) {
 			return err
@@ -130,9 +159,12 @@ func (r *MyControllerReconciler) setupMyController(ctx context.Context, m *mycon
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
+	return nil
+}
 
+func (r *MyControllerReconciler) setupMyController(ctx context.Context, m *mycontrollerv1.MyController) error {
 	// create configmap
-	err = r.createConfigMap(ctx, m)
+	err := r.createConfigMap(ctx, m)
 	if err != nil {
 		return err
 	}
@@ -204,27 +236,7 @@ func (r *MyControllerReconciler) deployMyController(ctx context.Context, m *myco
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Image:   "quay.io/mycontroller/server:master",
-						Name:    "mycontroller",
-						Command: []string{"/app/mycontroller-server", "-config", "/app/mycontroller.yaml"},
-						Ports: []corev1.ContainerPort{{
-							ContainerPort: 8080,
-							Name:          "mycontroller",
-						}},
-						VolumeMounts: []corev1.VolumeMount{
-							{
-								Name:      "myc-data-dir",
-								MountPath: "/mc_home",
-							},
-							{
-								Name:      "myc-config",
-								MountPath: "/app/mycontroller.yaml",
-								SubPath:   "mycontroller.yaml",
-								ReadOnly:  true,
-							},
-						},
-					},
+					Containers: []corev1.Container{
 						{
 							Name:  "influxdb",
 							Image: "influxdb:1.8.4",
@@ -236,6 +248,47 @@ func (r *MyControllerReconciler) deployMyController(ctx context.Context, m *myco
 								Name:      "myc-metric-dir",
 								MountPath: "/var/lib/influxdb",
 							}},
+							LivenessProbe: &corev1.Probe{
+								InitialDelaySeconds: 7000,
+								Handler: corev1.Handler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path:   "health",
+										Port:   intstr.FromInt(8086),
+										Scheme: corev1.URISchemeHTTP,
+									},
+								},
+							},
+						},
+						{
+							Image:   "quay.io/mycontroller/server:master",
+							Name:    "mycontroller",
+							Command: []string{"/app/mycontroller-server", "-config", "/app/mycontroller.yaml"},
+							Ports: []corev1.ContainerPort{{
+								ContainerPort: 8080,
+								Name:          "mycontroller",
+							}},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "myc-data-dir",
+									MountPath: "/mc_home",
+								},
+								{
+									Name:      "myc-config",
+									MountPath: "/app/mycontroller.yaml",
+									SubPath:   "mycontroller.yaml",
+									ReadOnly:  true,
+								},
+							},
+							LivenessProbe: &corev1.Probe{
+								InitialDelaySeconds: 5000,
+								Handler: corev1.Handler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path:   "api/status",
+										Port:   intstr.FromInt(8080),
+										Scheme: corev1.URISchemeHTTP,
+									},
+								},
+							},
 						}},
 					Volumes: []corev1.Volume{
 						dataVolume,
@@ -251,7 +304,7 @@ func (r *MyControllerReconciler) deployMyController(ctx context.Context, m *myco
 			},
 		},
 	}
-	// Set Memcached instance as the owner and controller
+	// Set MyController instance as the owner and controller
 	ctrl.SetControllerReference(m, mycDeployment, r.Scheme)
 	err := r.Create(ctx, mycDeployment)
 	if err != nil {
@@ -418,7 +471,7 @@ func (r *MyControllerReconciler) createService(ctx context.Context, m *mycontrol
 
 func (r *MyControllerReconciler) createRoute(ctx context.Context, m *mycontrollerv1.MyController) error {
 	// if it is a openshift platform continue or exit
-	if os.Getenv("is_openshift") != "true" {
+	if !isOpenshift() {
 		return nil
 	}
 
@@ -434,7 +487,7 @@ func (r *MyControllerReconciler) createRoute(ctx context.Context, m *mycontrolle
 			TLS:  &routev1.TLSConfig{},
 		},
 	}
-	// Set Memcached instance as the owner and controller
+	// Set MyController instance as the owner and controller
 	ctrl.SetControllerReference(m, mycRoute, r.Scheme)
 
 	err := r.Create(ctx, mycRoute)

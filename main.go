@@ -22,10 +22,8 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
-	"k8s.io/client-go/discovery"
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	routev1 "github.com/openshift/api/route/v1"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -97,39 +95,6 @@ func main() {
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
-	}
-
-	// Adding the routev1
-	if err := routev1.AddToScheme(mgr.GetScheme()); err != nil {
-		setupLog.Error(err, "")
-		os.Exit(1)
-	}
-
-	// update platform
-	dClient, err := discovery.NewDiscoveryClientForConfig(mgr.GetConfig())
-	if err != nil {
-		setupLog.Error(err, "problem getting platform details")
-		os.Exit(1)
-	}
-
-	apiList, err := dClient.ServerGroups()
-	if err != nil {
-		setupLog.Error(err, "problem getting platform details")
-		os.Exit(1)
-	}
-
-	err = os.Setenv("is_openshift", "false")
-	if err != nil {
-		setupLog.Error(err, "problem setting environment 'is_openshift'")
-	}
-	apiGroups := apiList.Groups
-	for _, group := range apiGroups {
-		if group.Name == "route.openshift.io" {
-			err = os.Setenv("is_openshift", "true")
-			if err != nil {
-				setupLog.Error(err, "problem setting environment 'is_openshift'")
-			}
-		}
 	}
 
 	setupLog.Info("starting manager")
