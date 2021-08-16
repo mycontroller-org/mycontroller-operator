@@ -25,7 +25,7 @@ jobs:
       
       - uses: shivanshs9/setup-k8s-operator-sdk@v1
         with:
-        version: "1.11.0"
+          version: "1.11.0"
 
       - name: Build container and push
         run: |
