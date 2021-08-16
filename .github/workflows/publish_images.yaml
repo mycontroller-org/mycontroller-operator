@@ -32,3 +32,4 @@ jobs:
           make generate
           make docker-build docker-push # operator image
           make bundle bundle-build bundle-push # operator bundle image
+          make catalog-build catalog-push # operator catalog image
