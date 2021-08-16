@@ -192,8 +192,8 @@ spec:
   - name: Mycontroller Operator
     url: https://mycontroller-operator.domain
   maintainers:
-  - email: jkandasa@gmail.com'
-    name: '''Jeeva Kandasamy'
+  - email: jkandasa@gmail.com
+    name: Jeeva Kandasamy
   maturity: alpha
   provider:
     name: MyController.org
