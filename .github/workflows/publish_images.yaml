@@ -23,9 +23,9 @@ jobs:
         with:
           go-version: ^1.16
       
-      - uses: shivanshs9/setup-k8s-operator-sdk@v1
+      - uses: jpkrohling/setup-operator-sdk@v1.1.0
         with:
-          version: "v1.11.0"
+          operator-sdk-version: v1.11.0
 
       - name: Build container and push
         run: |
