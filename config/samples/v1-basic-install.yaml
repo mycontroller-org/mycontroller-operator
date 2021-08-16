@@ -1,0 +1,8 @@
+apiVersion: mycontroller.org/v1
+kind: MyController
+metadata:
+  name: basic-install
+spec:
+  secret: my-secret
+  disable_analytics: true
+  log_level: info
