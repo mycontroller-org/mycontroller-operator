@@ -1,0 +1,54 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: mycontroller-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: MyController is the Schema for the mycontrollers API
+      displayName: My Controller
+      kind: MyController
+      name: mycontrollers.mycontroller.org
+      version: v1
+  description: MyController home automation (IoT) server
+  displayName: MyController
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - home-automation
+  - iot
+  - automation
+  - esphome
+  - tasmota
+  - mysenaors
+  - mycontroller
+  links:
+  - name: Mycontroller Operator
+    url: https://mycontroller-operator.domain
+  maintainers:
+  - email: jkandasa@gmail.com'
+    name: '''Jeeva Kandasamy'
+  maturity: alpha
+  provider:
+    name: MyController.org
+    url: https://v2.mycontroller.org
+  version: 0.0.0
