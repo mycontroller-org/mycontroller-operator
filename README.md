@@ -17,7 +17,7 @@ metadata:
   namespace: openshift-marketplace
 spec:
   displayName: MyController Catalog
-  image: quay.io/jkandasa/mycontroller-operator-catalog@sha256:73df809bdd12c27dc281958377c3f0ff506db228cb4b941b1fa8cc9434eb47a9
+  image: quay.io/mycontroller/mycontroller-operator-catalog:v0.0.1
   sourceType: grpc
 ```
 
@@ -43,8 +43,8 @@ oc create -f mycontroller-subscription.yaml
 ## Deploy MyController server
 ```bash
 # basic install
-kubectl create -f https://raw.githubusercontent.com/jkandasa/mycontroller-operator/master/config/samples/v1-basic-install.yaml
+kubectl create -f https://raw.githubusercontent.com/mycontroller-org/mycontroller-operator/master/config/samples/v1-basic-install.yaml
 
 # with storage
-kubectl create -f https://raw.githubusercontent.com/jkandasa/mycontroller-operator/master/config/samples/v1-with-storage.yaml
+kubectl create -f https://raw.githubusercontent.com/mycontroller-org/mycontroller-operator/master/config/samples/v1-with-storage.yaml
 ```
