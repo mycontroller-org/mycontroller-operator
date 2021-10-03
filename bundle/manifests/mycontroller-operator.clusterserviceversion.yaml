@@ -109,7 +109,7 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: quay.io/jkandasa/mycontroller-operator:0.0.1
+                image: quay.io/mycontroller/mycontroller-operator:0.0.1
                 livenessProbe:
                   httpGet:
                     path: /healthz

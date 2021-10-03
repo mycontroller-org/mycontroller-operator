@@ -1,4 +1,4 @@
-module github.com/jkandasa/mycontroller-operator
+module github.com/mycontroller-org/mycontroller-operator
 
 go 1.16
 

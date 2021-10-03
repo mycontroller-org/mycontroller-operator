@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	mycontrollerv1 "github.com/jkandasa/mycontroller-operator/api/v1"
+	mycontrollerv1 "github.com/mycontroller-org/mycontroller-operator/api/v1"
 	mycCmap "github.com/mycontroller-org/server/v2/pkg/model/cmap"
 	mycConfig "github.com/mycontroller-org/server/v2/pkg/model/config"
 	mycServicefilter "github.com/mycontroller-org/server/v2/pkg/model/service_filter"
