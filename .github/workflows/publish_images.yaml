@@ -2,6 +2,7 @@ name: publish container images
 on:
   push:
     branches: [master]
+    tags: ["v*"]
 
 jobs:
   setup:
@@ -21,11 +22,11 @@ jobs:
 
       - uses: actions/setup-go@v2
         with:
-          go-version: ^1.16
+          go-version: ^1.18
       
       - uses: jpkrohling/setup-operator-sdk@v1.1.0
         with:
-          operator-sdk-version: v1.11.0
+          operator-sdk-version: v1.23.0
 
       - name: Build container and push
         run: |

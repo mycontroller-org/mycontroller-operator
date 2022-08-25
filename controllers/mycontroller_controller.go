@@ -35,9 +35,9 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	mycontrollerv1 "github.com/mycontroller-org/mycontroller-operator/api/v1"
-	mycCmap "github.com/mycontroller-org/server/v2/pkg/model/cmap"
-	mycConfig "github.com/mycontroller-org/server/v2/pkg/model/config"
-	mycServicefilter "github.com/mycontroller-org/server/v2/pkg/model/service_filter"
+	mycCmap "github.com/mycontroller-org/server/v2/pkg/types/cmap"
+	mycConfig "github.com/mycontroller-org/server/v2/pkg/types/config"
+	mycServicefilter "github.com/mycontroller-org/server/v2/pkg/types/service_filter"
 )
 
 // MyControllerReconciler reconciles a MyController object
@@ -255,7 +255,7 @@ func (r *MyControllerReconciler) deployMyController(ctx context.Context, m *myco
 							}},
 							LivenessProbe: &corev1.Probe{
 								InitialDelaySeconds: 7000,
-								Handler: corev1.Handler{
+								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
 										Path:   "health",
 										Port:   intstr.FromInt(8086),
@@ -286,7 +286,7 @@ func (r *MyControllerReconciler) deployMyController(ctx context.Context, m *myco
 							},
 							LivenessProbe: &corev1.Probe{
 								InitialDelaySeconds: 5000,
-								Handler: corev1.Handler{
+								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
 										Path:   "api/status",
 										Port:   intstr.FromInt(8080),
