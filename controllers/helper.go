@@ -7,7 +7,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-var openshiftPlatform = false
+var (
+	openshiftPlatform = false
+)
 
 func isOpenshift() bool {
 	return openshiftPlatform
@@ -32,6 +34,7 @@ func updatePlatform(mgr ctrl.Manager) error {
 	for _, group := range apiGroups {
 		if group.Name == "route.openshift.io" {
 			openshiftPlatform = true
+			break
 		}
 	}
 	log.Info("platform detail", "is_openshift", openshiftPlatform)

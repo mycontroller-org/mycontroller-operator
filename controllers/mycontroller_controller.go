@@ -40,10 +40,40 @@ import (
 	mycServicefilter "github.com/mycontroller-org/server/v2/pkg/types/service_filter"
 )
 
+const (
+	INFLUXDB_IMAGE           = "influxdb:1.8.4"
+	INFLUXDB_PORT            = 8086
+	MYCONTROLLER_SERVER_PORT = 8080
+)
+
 // MyControllerReconciler reconciles a MyController object
 type MyControllerReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *MyControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	log := mgr.GetLogger()
+
+	// update platform
+	err := updatePlatform(mgr)
+	if err != nil {
+		return err
+	}
+
+	// Adding the routev1
+	if isOpenshift() {
+		if err := routev1.AddToScheme(mgr.GetScheme()); err != nil {
+			log.Error(err, "")
+			return err
+		}
+	}
+
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&mycontrollerv1.MyController{}).
+		Owns(&appsv1.Deployment{}).
+		Complete(r)
 }
 
 //+kubebuilder:rbac:groups=mycontroller.org,resources=mycontrollers,verbs=get;list;watch;create;update;patch;delete
@@ -116,30 +146,6 @@ func (r *MyControllerReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *MyControllerReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	log := mgr.GetLogger()
-
-	// update platform
-	err := updatePlatform(mgr)
-	if err != nil {
-		return err
-	}
-
-	// Adding the routev1
-	if isOpenshift() {
-		if err := routev1.AddToScheme(mgr.GetScheme()); err != nil {
-			log.Error(err, "")
-			return err
-		}
-	}
-
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&mycontrollerv1.MyController{}).
-		Owns(&appsv1.Deployment{}).
-		Complete(r)
-}
-
 func (r *MyControllerReconciler) removeMyController(ctx context.Context, m *mycontrollerv1.MyController) error {
 	// delete existing resources and create new resources
 	// delete deployment
@@ -147,11 +153,13 @@ func (r *MyControllerReconciler) removeMyController(ctx context.Context, m *myco
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
+
 	// delete configmap
 	err = r.Delete(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: m.Namespace, Name: m.Name}})
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
+
 	// delete route
 	if isOpenshift() {
 		err = r.Delete(ctx, &routev1.Route{ObjectMeta: metav1.ObjectMeta{Namespace: m.Namespace, Name: m.Name}})
@@ -159,11 +167,13 @@ func (r *MyControllerReconciler) removeMyController(ctx context.Context, m *myco
 			return err
 		}
 	}
+
 	// delete service
 	err = r.Delete(ctx, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: m.Namespace, Name: m.Name}})
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
+
 	return nil
 }
 
@@ -244,9 +254,9 @@ func (r *MyControllerReconciler) deployMyController(ctx context.Context, m *myco
 					Containers: []corev1.Container{
 						{
 							Name:  "influxdb",
-							Image: "influxdb:1.8.4",
+							Image: INFLUXDB_IMAGE,
 							Ports: []corev1.ContainerPort{{
-								ContainerPort: 8086,
+								ContainerPort: INFLUXDB_PORT,
 								Name:          "influxdb",
 							}},
 							VolumeMounts: []corev1.VolumeMount{{
@@ -254,11 +264,12 @@ func (r *MyControllerReconciler) deployMyController(ctx context.Context, m *myco
 								MountPath: "/var/lib/influxdb",
 							}},
 							LivenessProbe: &corev1.Probe{
-								InitialDelaySeconds: 7000,
+								InitialDelaySeconds: 30,
+								PeriodSeconds:       30,
 								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
 										Path:   "health",
-										Port:   intstr.FromInt(8086),
+										Port:   intstr.FromInt(INFLUXDB_PORT),
 										Scheme: corev1.URISchemeHTTP,
 									},
 								},
@@ -269,7 +280,7 @@ func (r *MyControllerReconciler) deployMyController(ctx context.Context, m *myco
 							Name:    "mycontroller",
 							Command: []string{"/app/mycontroller-server", "-config", "/app/mycontroller.yaml"},
 							Ports: []corev1.ContainerPort{{
-								ContainerPort: 8080,
+								ContainerPort: MYCONTROLLER_SERVER_PORT,
 								Name:          "mycontroller",
 							}},
 							VolumeMounts: []corev1.VolumeMount{
@@ -285,11 +296,12 @@ func (r *MyControllerReconciler) deployMyController(ctx context.Context, m *myco
 								},
 							},
 							LivenessProbe: &corev1.Probe{
-								InitialDelaySeconds: 5000,
+								InitialDelaySeconds: 30,
+								PeriodSeconds:       30,
 								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
 										Path:   "api/status",
-										Port:   intstr.FromInt(8080),
+										Port:   intstr.FromInt(MYCONTROLLER_SERVER_PORT),
 										Scheme: corev1.URISchemeHTTP,
 									},
 								},
@@ -398,7 +410,7 @@ func (r *MyControllerReconciler) createConfigMap(ctx context.Context, m *mycontr
 			Metric: mycCmap.CustomMap{
 				"disabled":             "false",
 				"type":                 "influxdb",
-				"uri":                  "http://localhost:8086",
+				"uri":                  fmt.Sprintf("http://localhost:%d", INFLUXDB_PORT),
 				"token":                "",
 				"username":             "",
 				"password":             "",
